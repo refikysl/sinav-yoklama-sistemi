@@ -39,13 +39,20 @@ class SinavPDF(FPDF):
         self.saa_str = saat
         self.hoc_str = hoca
         
+        # UTF-8 desteğini etkinleştir
+        self.set_auto_page_break(auto=True, margin=15)
+        
         font_secenekleri = [
             ("Arial", "C:\\Windows\\Fonts\\arial.ttf", "C:\\Windows\\Fonts\\arialbd.ttf"),
             ("Calibri", "C:\\Windows\\Fonts\\calibri.ttf", "C:\\Windows\\Fonts\\calibrib.ttf"),
-            ("Times New Roman", "C:\\Windows\\Fonts\\times.ttf", "C:\\Windows\\Fonts\\timesbd.ttf")
+            ("Times New Roman", "C:\\Windows\\Fonts\\times.ttf", "C:\\Windows\\Fonts\\timesbd.ttf"),
+            # Linux/Streamlit Cloud için alternatif font yolları
+            ("DejaVu", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+            ("LiberationSans", "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf")
         ]
         
         self.fnt = 'Helvetica'
+        self.font_added = False
         
         for font_adi, font_yolu, font_yolu_bold in font_secenekleri:
             if os.path.exists(font_yolu) and os.path.exists(font_yolu_bold):
@@ -53,28 +60,58 @@ class SinavPDF(FPDF):
                     self.add_font(font_adi, '', font_yolu, uni=True)
                     self.add_font(font_adi, 'B', font_yolu_bold, uni=True)
                     self.fnt = font_adi
+                    self.font_added = True
                     break
                 except Exception as e:
                     continue
         
-        if self.fnt == 'Helvetica':
-            self.set_font('Helvetica', '', 12)
+        if not self.font_added:
+            # Font eklenemediyse, Türkçe karakterler için uygun bir font kullan
+            try:
+                # Arial Unicode MS gibi geniş karakter seti olan bir font deneyelim
+                self.add_font('ArialUnicode', '', 'arialuni.ttf', uni=True)
+                self.add_font('ArialUnicode', 'B', 'arialunib.ttf', uni=True)
+                self.fnt = 'ArialUnicode'
+                self.font_added = True
+            except:
+                # Hiçbir font eklenemezse Helvetica kullan ama Türkçe karakterleri değiştir
+                self.fnt = 'Helvetica'
+                # Türkçe karakter mapping
+                self.turkce_replace = {
+                    'ç': 'c', 'ğ': 'g', 'ı': 'i', 'ö': 'o', 'ş': 's', 'ü': 'u',
+                    'Ç': 'C', 'Ğ': 'G', 'İ': 'I', 'Ö': 'O', 'Ş': 'S', 'Ü': 'U'
+                }
+
+    def _clean_text(self, text):
+        """Türkçe karakterleri temizle (eğer font desteklemiyorsa)"""
+        if not hasattr(self, 'font_added') or not self.font_added:
+            if hasattr(self, 'turkce_replace'):
+                for turkce, latin in self.turkce_replace.items():
+                    text = text.replace(turkce, latin)
+        return text
 
     def yoklama_header(self, sinif):
+        # Başlıkları temizle
+        uni_clean = self._clean_text(self.uni_str)
+        fak_clean = self._clean_text(self.fak_str)
+        bol_clean = self._clean_text(self.bol_str)
+        der_clean = self._clean_text(self.der_str)
+        sinif_clean = self._clean_text(sinif)
+        
         self.set_font(self.fnt, 'B', 10)
-        self.cell(0, 5, f"{self.uni_str} {self.fak_str}", ln=True, align='C')
-        self.cell(0, 5, f"{self.bol_str} {self.sinav_turu} TUTANAĞI", ln=True, align='C')
+        self.cell(0, 5, f"{uni_clean} {fak_clean}", ln=True, align='C')
+        self.cell(0, 5, f"{bol_clean} {self._clean_text(self.sinav_turu)} TUTANAĞI", ln=True, align='C')
         self.ln(5)
         
         self.set_font(self.fnt, 'B', 9)
         self.cell(25, 8, " Dersin Adı", 1)
         self.set_font(self.fnt, '', 9)
-        self.cell(168, 8, f" {self.der_str}", 1, ln=True)
+        self.cell(168, 8, f" {der_clean}", 1, ln=True)
         
         self.set_font(self.fnt, 'B', 9)
         self.cell(25, 8, " Sınıf No", 1)
         self.set_font(self.fnt, '', 9)
-        self.cell(40, 8, f" {sinif}", 1)
+        self.cell(40, 8, f" {sinif_clean}", 1)
         
         self.set_font(self.fnt, 'B', 9)
         self.cell(20, 8, " Tarih", 1)
@@ -88,24 +125,33 @@ class SinavPDF(FPDF):
         self.ln(3)
 
     def kapi_listesi_header(self, sinif):
+        # Başlıkları temizle
+        uni_clean = self._clean_text(self.uni_str)
+        fak_clean = self._clean_text(self.fak_str)
+        bol_clean = self._clean_text(self.bol_str)
+        der_clean = self._clean_text(self.der_str)
+        sinif_clean = self._clean_text(sinif)
+        
         self.set_font(self.fnt, 'B', 14)
-        self.cell(0, 8, self.uni_str, ln=True, align='C')
+        self.cell(0, 8, uni_clean, ln=True, align='C')
         self.ln(2)
         
         self.set_font(self.fnt, 'B', 12)
-        self.cell(0, 7, self.fak_str, ln=True, align='C')
+        self.cell(0, 7, fak_clean, ln=True, align='C')
         self.ln(2)
         
         self.set_font(self.fnt, 'B', 11)
-        self.cell(0, 6, f"{self.bol_str} - {self.der_str} {self.sinav_turu}", ln=True, align='C')
+        self.cell(0, 6, f"{bol_clean} - {der_clean} {self._clean_text(self.sinav_turu)}", ln=True, align='C')
         self.ln(3)
         
         self.set_font(self.fnt, 'B', 13)
-        self.cell(0, 8, f"Sınıf Listesi - {sinif}", ln=True, align='C')
+        self.cell(0, 8, f"Sınıf Listesi - {sinif_clean}", ln=True, align='C')
         self.ln(8)
     
     def yoklama_tablo(self, room_list, sinif_adi):
         """Dinamik yoklama tablosu - öğrenci sayısına göre otomatik ayarlanır"""
+        sinif_adi_clean = self._clean_text(sinif_adi)
+        
         # Tablo başlıkları
         self.set_font(self.fnt, 'B', 8)
         for _ in range(2):
@@ -125,7 +171,7 @@ class SinavPDF(FPDF):
         for sayfa_no in range(sayfa_sayisi):
             if sayfa_no > 0:
                 self.add_page()
-                self.yoklama_header(sinif_adi)
+                self.yoklama_header(sinif_adi_clean)
                 # Tablo başlıklarını tekrar yaz
                 self.set_font(self.fnt, 'B', 8)
                 for _ in range(2):
@@ -146,9 +192,11 @@ class SinavPDF(FPDF):
                 sira_no = baslangic + i
                 if sira_no < bitis:
                     s = room_list.iloc[sira_no]
+                    ad_soyad = f"{s.iloc[1]} {s.iloc[2]}"
+                    ad_soyad_clean = self._clean_text(ad_soyad)
                     self.cell(8, 6.5, str(sira_no + 1), 1, 0, 'C')
                     self.cell(20, 6.5, str(s.iloc[0]), 1, 0, 'C')
-                    self.cell(42, 6.5, f" {s.iloc[1]} {s.iloc[2]}", 1, 0, 'L')
+                    self.cell(42, 6.5, f" {ad_soyad_clean}", 1, 0, 'L')
                     self.cell(25, 6.5, "", 1, 0)
                 else:
                     for w in [8, 20, 42, 25]: self.cell(w, 6.5, "", 1, 0)
@@ -158,9 +206,11 @@ class SinavPDF(FPDF):
                 sira_no_sag = baslangic + i + 25
                 if sira_no_sag < bitis:
                     s = room_list.iloc[sira_no_sag]
+                    ad_soyad = f"{s.iloc[1]} {s.iloc[2]}"
+                    ad_soyad_clean = self._clean_text(ad_soyad)
                     self.cell(8, 6.5, str(sira_no_sag + 1), 1, 0, 'C')
                     self.cell(20, 6.5, str(s.iloc[0]), 1, 0, 'C')
-                    self.cell(42, 6.5, f" {s.iloc[1]} {s.iloc[2]}", 1, 0, 'L')
+                    self.cell(42, 6.5, f" {ad_soyad_clean}", 1, 0, 'L')
                     self.cell(25, 6.5, "", 1, 1)
                 else:
                     for w in [8, 20, 42]: self.cell(w, 6.5, "", 1, 0)
@@ -184,7 +234,8 @@ class SinavPDF(FPDF):
                 self.cell(box_w, 5, titles[j], 0, 1, 'C')
                 self.set_font(self.fnt, '', 8)
                 if j == 2:
-                    self.set_x(x_coord); self.cell(box_w, 5, f" {self.hoc_str}", 0, 1, 'C')
+                    hoca_clean = self._clean_text(self.hoc_str)
+                    self.set_x(x_coord); self.cell(box_w, 5, f" {hoca_clean}", 0, 1, 'C')
                 else:
                     self.set_x(x_coord); self.cell(box_w, 5, " Adı Soyadı:", 0, 1, 'L')
                 self.set_x(x_coord); self.cell(box_w, 5, " İmza:", 0, 1, 'L')
@@ -192,6 +243,8 @@ class SinavPDF(FPDF):
     
     def kapi_listesi_tablo(self, room_list, sinif_adi):
         """Dinamik kapı listesi tablosu - öğrenci sayısına göre otomatik ayarlanır"""
+        sinif_adi_clean = self._clean_text(sinif_adi)
+        
         # Tablo başlıkları
         self.set_font(self.fnt, 'B', 8)
         for _ in range(2):
@@ -210,7 +263,7 @@ class SinavPDF(FPDF):
         for sayfa_no in range(sayfa_sayisi):
             if sayfa_no > 0:
                 self.add_page()
-                self.kapi_listesi_header(sinif_adi)
+                self.kapi_listesi_header(sinif_adi_clean)
                 # Tablo başlıklarını tekrar yaz
                 self.set_font(self.fnt, 'B', 8)
                 for _ in range(2):
@@ -230,9 +283,11 @@ class SinavPDF(FPDF):
                 sira_no = baslangic + i
                 if sira_no < bitis:
                     s = room_list.iloc[sira_no]
+                    ad_soyad = f"{s.iloc[1]} {s.iloc[2]}"
+                    ad_soyad_clean = self._clean_text(ad_soyad)
                     self.cell(8, 6.5, str(sira_no + 1), 1, 0, 'C')
                     self.cell(20, 6.5, str(s.iloc[0]), 1, 0, 'C')
-                    self.cell(70, 6.5, f" {s.iloc[1]} {s.iloc[2]}", 1, 0, 'L')
+                    self.cell(70, 6.5, f" {ad_soyad_clean}", 1, 0, 'L')
                 else:
                     for w in [8, 20, 70]: self.cell(w, 6.5, "", 1, 0)
                 self.cell(2, 6.5, "", 0, 0)
@@ -241,9 +296,11 @@ class SinavPDF(FPDF):
                 sira_no_sag = baslangic + i + 25
                 if sira_no_sag < bitis:
                     s = room_list.iloc[sira_no_sag]
+                    ad_soyad = f"{s.iloc[1]} {s.iloc[2]}"
+                    ad_soyad_clean = self._clean_text(ad_soyad)
                     self.cell(8, 6.5, str(sira_no_sag + 1), 1, 0, 'C')
                     self.cell(20, 6.5, str(s.iloc[0]), 1, 0, 'C')
-                    self.cell(70, 6.5, f" {s.iloc[1]} {s.iloc[2]}", 1, 1, 'L')
+                    self.cell(70, 6.5, f" {ad_soyad_clean}", 1, 1, 'L')
                 else:
                     for w in [8, 20, 70]: self.cell(w, 6.5, "", 1, 0)
                     self.ln(6.5)
@@ -418,8 +475,7 @@ if uploaded_file and st.session_state.rooms:
                         pdf.yoklama_header(room['Ad'])
                         pdf.yoklama_tablo(room_list, room['Ad'])
 
-                        pdf_output = pdf.output()
-                        if isinstance(pdf_output, str): pdf_output = pdf_output.encode('latin-1')
+                        pdf_output = pdf.output(dest='S').encode('latin-1', 'replace')
                         zip_file.writestr(f"Yoklama_{room['Ad']}.pdf", pdf_output)
 
                         # KAPI LİSTESİ PDF (DİNAMİK)
@@ -428,8 +484,7 @@ if uploaded_file and st.session_state.rooms:
                         pdf_kapi.kapi_listesi_header(room['Ad'])
                         pdf_kapi.kapi_listesi_tablo(room_list, room['Ad'])
 
-                        kapi_output = pdf_kapi.output()
-                        if isinstance(kapi_output, str): kapi_output = kapi_output.encode('latin-1')
+                        kapi_output = pdf_kapi.output(dest='S').encode('latin-1', 'replace')
                         zip_file.writestr(f"Kapi_Listesi_{room['Ad']}.pdf", kapi_output)
 
                     # PANO LİSTESİ (DEĞİŞMEDİ)
@@ -441,7 +496,7 @@ if uploaded_file and st.session_state.rooms:
                     pdf_p = SinavPDF(uni_inp, fak_inp, bol_inp, der_inp, sinav_turu_inp, tar_inp, saa_inp, hoc_inp)
                     pdf_p.add_page()
                     pdf_p.set_font(pdf_p.fnt, 'B', 12)
-                    pdf_p.cell(0, 10, f"{der_inp} {sinav_turu_inp} YERLEŞİM PLANI", ln=True, align='C')
+                    pdf_p.cell(0, 10, f"{self._clean_text(der_inp)} {self._clean_text(sinav_turu_inp)} YERLEŞİM PLANI", ln=True, align='C')
                     pdf_p.ln(5)
                     
                     pdf_p.set_font(pdf_p.fnt, 'B', 9)
@@ -453,14 +508,16 @@ if uploaded_file and st.session_state.rooms:
                     
                     pdf_p.set_font(pdf_p.fnt, '', 7.5)
                     for r in pano_df.itertuples(index=False):
+                        ad_clean = pdf_p._clean_text(str(r[2]))
+                        soyad_clean = pdf_p._clean_text(str(r[3]))
+                        sinif_clean = pdf_p._clean_text(str(r[4]))
                         pdf_p.cell(15, 7, str(r[0]), 1, 0, 'C')
                         pdf_p.cell(25, 7, str(r[1]), 1, 0, 'C')
-                        pdf_p.cell(50, 7, f" {r[2]}", 1)
-                        pdf_p.cell(50, 7, f" {r[3]}", 1)
-                        pdf_p.cell(25, 7, f" {r[4]}", 1, 1, 'C')
+                        pdf_p.cell(50, 7, f" {ad_clean}", 1)
+                        pdf_p.cell(50, 7, f" {soyad_clean}", 1)
+                        pdf_p.cell(25, 7, f" {sinif_clean}", 1, 1, 'C')
                     
-                    p_output = pdf_p.output()
-                    if isinstance(p_output, str): p_output = p_output.encode('latin-1')
+                    p_output = pdf_p.output(dest='S').encode('latin-1', 'replace')
                     zip_file.writestr("Pano_Listesi.pdf", p_output)
 
             st.success("✅ Tüm belgeler başarıyla oluşturuldu!")
