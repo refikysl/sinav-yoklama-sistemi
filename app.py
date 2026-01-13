@@ -42,40 +42,24 @@ class SinavPDF(FPDF):
         # UTF-8 desteğini etkinleştir
         self.set_auto_page_break(auto=True, margin=15)
         
-        font_secenekleri = [
-            ("Arial", "C:\\Windows\\Fonts\\arial.ttf", "C:\\Windows\\Fonts\\arialbd.ttf"),
-            ("Calibri", "C:\\Windows\\Fonts\\calibri.ttf", "C:\\Windows\\Fonts\\calibrib.ttf"),
-            ("Times New Roman", "C:\\Windows\\Fonts\\times.ttf", "C:\\Windows\\Fonts\\timesbd.ttf"),
-            # Linux/Streamlit Cloud için alternatif font yolları
-            ("DejaVu", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
-            ("LiberationSans", "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf")
-        ]
-        
-        self.fnt = 'Helvetica'
-        self.font_added = False
-        
-        for font_adi, font_yolu, font_yolu_bold in font_secenekleri:
-            if os.path.exists(font_yolu) and os.path.exists(font_yolu_bold):
-                try:
-                    self.add_font(font_adi, '', font_yolu, uni=True)
-                    self.add_font(font_adi, 'B', font_yolu_bold, uni=True)
-                    self.fnt = font_adi
-                    self.font_added = True
-                    break
-                except Exception as e:
-                    continue
-        
-        if not self.font_added:
-            # Font eklenemediyse, Türkçe karakterler için uygun bir font kullan
+        # DejaVu fontunu kullan (Türkçe karakter desteği için)
+        try:
+            # Streamlit Cloud için DejaVu fontu
+            self.add_font('DejaVu', '', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', uni=True)
+            self.add_font('DejaVu', 'B', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', uni=True)
+            self.fnt = 'DejaVu'
+            self.font_added = True
+        except:
             try:
-                # Arial Unicode MS gibi geniş karakter seti olan bir font deneyelim
+                # Arial Unicode MS (Windows) - geniş Unicode desteği
                 self.add_font('ArialUnicode', '', 'arialuni.ttf', uni=True)
                 self.add_font('ArialUnicode', 'B', 'arialunib.ttf', uni=True)
                 self.fnt = 'ArialUnicode'
                 self.font_added = True
             except:
-                # Hiçbir font eklenemezse Helvetica kullan ama Türkçe karakterleri değiştir
+                # Font eklenemediyse Helvetica kullan ama Türkçe karakterleri değiştir
                 self.fnt = 'Helvetica'
+                self.font_added = False
                 # Türkçe karakter mapping
                 self.turkce_replace = {
                     'ç': 'c', 'ğ': 'g', 'ı': 'i', 'ö': 'o', 'ş': 's', 'ü': 'u',
@@ -84,7 +68,7 @@ class SinavPDF(FPDF):
 
     def _clean_text(self, text):
         """Türkçe karakterleri temizle (eğer font desteklemiyorsa)"""
-        if not hasattr(self, 'font_added') or not self.font_added:
+        if not self.font_added:
             if hasattr(self, 'turkce_replace'):
                 for turkce, latin in self.turkce_replace.items():
                     text = text.replace(turkce, latin)
@@ -469,25 +453,29 @@ if uploaded_file and st.session_state.rooms:
                         temp_df['Sınıf'] = room['Ad']
                         all_assigned_students.append(temp_df)
 
-                        # YOKLAMA PDF (DİNAMİK)
+                        # YOKLAMA PDF
                         pdf = SinavPDF(uni_inp, fak_inp, bol_inp, der_inp, sinav_turu_inp, tar_inp, saa_inp, hoc_inp)
                         pdf.add_page()
                         pdf.yoklama_header(room['Ad'])
                         pdf.yoklama_tablo(room_list, room['Ad'])
 
-                        pdf_output = pdf.output(dest='S').encode('latin-1', 'replace')
+                        pdf_output = pdf.output()
+                        if isinstance(pdf_output, str): 
+                            pdf_output = pdf_output.encode('latin-1', 'replace')
                         zip_file.writestr(f"Yoklama_{room['Ad']}.pdf", pdf_output)
 
-                        # KAPI LİSTESİ PDF (DİNAMİK)
+                        # KAPI LİSTESİ PDF
                         pdf_kapi = SinavPDF(uni_inp, fak_inp, bol_inp, der_inp, sinav_turu_inp, tar_inp, saa_inp, hoc_inp)
                         pdf_kapi.add_page()
                         pdf_kapi.kapi_listesi_header(room['Ad'])
                         pdf_kapi.kapi_listesi_tablo(room_list, room['Ad'])
 
-                        kapi_output = pdf_kapi.output(dest='S').encode('latin-1', 'replace')
+                        kapi_output = pdf_kapi.output()
+                        if isinstance(kapi_output, str): 
+                            kapi_output = kapi_output.encode('latin-1', 'replace')
                         zip_file.writestr(f"Kapi_Listesi_{room['Ad']}.pdf", kapi_output)
 
-                    # PANO LİSTESİ (DEĞİŞMEDİ)
+                    # PANO LİSTESİ
                     pano_df = pd.concat(all_assigned_students).reset_index(drop=True)
                     pano_df['Siralama_Anahtari'] = pano_df.iloc[:, 2].apply(turkce_sirala_anahtar)
                     pano_df = pano_df.sort_values(by='Siralama_Anahtari').reset_index(drop=True)
@@ -496,7 +484,11 @@ if uploaded_file and st.session_state.rooms:
                     pdf_p = SinavPDF(uni_inp, fak_inp, bol_inp, der_inp, sinav_turu_inp, tar_inp, saa_inp, hoc_inp)
                     pdf_p.add_page()
                     pdf_p.set_font(pdf_p.fnt, 'B', 12)
-                    pdf_p.cell(0, 10, f"{self._clean_text(der_inp)} {self._clean_text(sinav_turu_inp)} YERLEŞİM PLANI", ln=True, align='C')
+                    
+                    # Pano başlığı için temizlenmiş metin
+                    der_clean = pdf_p._clean_text(der_inp)
+                    sinav_turu_clean = pdf_p._clean_text(sinav_turu_inp)
+                    pdf_p.cell(0, 10, f"{der_clean} {sinav_turu_clean} YERLEŞİM PLANI", ln=True, align='C')
                     pdf_p.ln(5)
                     
                     pdf_p.set_font(pdf_p.fnt, 'B', 9)
@@ -508,6 +500,7 @@ if uploaded_file and st.session_state.rooms:
                     
                     pdf_p.set_font(pdf_p.fnt, '', 7.5)
                     for r in pano_df.itertuples(index=False):
+                        # r[0]: Sıra, r[1]: No, r[2]: Ad, r[3]: Soyad, r[4]: Sınıf
                         ad_clean = pdf_p._clean_text(str(r[2]))
                         soyad_clean = pdf_p._clean_text(str(r[3]))
                         sinif_clean = pdf_p._clean_text(str(r[4]))
@@ -517,7 +510,9 @@ if uploaded_file and st.session_state.rooms:
                         pdf_p.cell(50, 7, f" {soyad_clean}", 1)
                         pdf_p.cell(25, 7, f" {sinif_clean}", 1, 1, 'C')
                     
-                    p_output = pdf_p.output(dest='S').encode('latin-1', 'replace')
+                    p_output = pdf_p.output()
+                    if isinstance(p_output, str): 
+                        p_output = p_output.encode('latin-1', 'replace')
                     zip_file.writestr("Pano_Listesi.pdf", p_output)
 
             st.success("✅ Tüm belgeler başarıyla oluşturuldu!")
